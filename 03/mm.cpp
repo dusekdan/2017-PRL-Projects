@@ -7,7 +7,8 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define DEBUG 1
+#define DEBUG 0
+#define TIME_MEASUREMENT 0
 
 #define DECADIC_BASE 10
 
@@ -57,11 +58,20 @@ int main(int argc, char* argv[])
     int A = INT_MIN;
     int B = INT_MIN;
 
+    double _startTime;
+    double _endTime;
+    double _resultTime;
+
     loadMatrixes();
 
     // Load matrixes from input files
     if (myid == ROOT_RANK)
     {
+
+        if (TIME_MEASUREMENT)
+        {
+            _startTime = MPI_Wtime();
+        }
 
         if (DEBUG)
             debug_showLoadedMatrixes();
@@ -78,9 +88,28 @@ int main(int argc, char* argv[])
             if (DEBUG)
                 std::cout << "[P:" << myid << "|I:" << i << "] C+=" << A << "*"  << B << " My A:" << A << ", B:" << B << ", C:" << C << std::endl;
 
-            // Distribution
-            MPI_Send(&A, ELEMENT_COUNT, MPI_INT, 1, TAG_GROUP, MPI_COMM_WORLD);
-            MPI_Send(&B, ELEMENT_COUNT, MPI_INT, matrixBColumns, TAG_GROUP, MPI_COMM_WORLD);
+            // By thorough testing it has come to light that even ROOT should consider some corner cases
+
+            if (numprocs == 1)
+            {
+                // No friends, do nothing
+            }
+            else if(matrixBColumns == 1)
+            {
+                // No neighbor, sending only B to underling
+                MPI_Send(&B, ELEMENT_COUNT, MPI_INT, matrixBColumns, TAG_GROUP, MPI_COMM_WORLD);
+            }
+            else if(matrixARows == 1)
+            {
+                // No underling, sending only A to neighbor
+                MPI_Send(&A, ELEMENT_COUNT, MPI_INT, 1, TAG_GROUP, MPI_COMM_WORLD);
+            }
+            else
+            {
+                // I am totally normal and am sending everything every as a good seeder I am
+                MPI_Send(&A, ELEMENT_COUNT, MPI_INT, 1, TAG_GROUP, MPI_COMM_WORLD);
+                MPI_Send(&B, ELEMENT_COUNT, MPI_INT, matrixBColumns, TAG_GROUP, MPI_COMM_WORLD);
+            }
         }
 
     }
@@ -206,25 +235,35 @@ int main(int argc, char* argv[])
             finalMatrix.push_back(tmpBuff);
         }
         
-        // Print it out in desired format
-        std::cout << matrixARows  <<  ":"   << matrixBColumns << std::endl;
-        int loopControl = 1;
-        for (std::vector<int>::iterator it = finalMatrix.begin(); it != finalMatrix.end(); it++)
+
+        if (TIME_MEASUREMENT)
         {
+            _endTime = MPI_Wtime();
 
-            std::cout << *it;
-
-            if ((loopControl%matrixBColumns) == 0)
-            {
-                std::cout << std::endl;
-            }
-            else
-            {
-                std::cout << " ";
-            }
-
-            loopControl++;
+            std::cout << (_endTime - _startTime) << std::endl;
         }
+        else
+        {
+            // Print it out in desired format
+            std::cout << matrixARows  <<  ":"   << matrixBColumns << std::endl;
+            int loopControl = 1;
+            for (std::vector<int>::iterator it = finalMatrix.begin(); it != finalMatrix.end(); it++)
+            {
+                std::cout << *it;
+
+                if ((loopControl%matrixBColumns) == 0)
+                {
+                    std::cout << std::endl;
+                }
+                else
+                {
+                    std::cout << " ";
+                }
+
+                loopControl++;
+            }
+        }
+
     }
     else
     {
