@@ -25,6 +25,7 @@ void loadMatFile(char type);
 void debug_showLoadedMatrixes();
 int getElement(int x, int y, char type);
 int getElementByWidth(int x, int y, int width, char type);
+int calculateAMatrixOffset(int myid);
 
 std::vector<int> matrixA;
 int matrixAColumns;
@@ -58,13 +59,12 @@ int main(int argc, char* argv[])
 
     loadMatrixes();
 
-
-    
     // Load matrixes from input files
     if (myid == ROOT_RANK)
     {
 
-        debug_showLoadedMatrixes();
+        if (DEBUG)
+            debug_showLoadedMatrixes();
 
         // Root rank will distribute (in steps) numbers to other processors
         // I use matrixAColumns, because matrixAColums == matrixBRows in order to mutliply matrixes successfully
@@ -75,8 +75,8 @@ int main(int argc, char* argv[])
             B = getElementByWidth(0, i, matrixBColumns, 'B');
             C += (A*B);
         
-           std::cout << "[P:" << myid << "|I:" << i << "] C+=" << A << "*"  << B << " My A:" << A << ", B:" << B << ", C:" << C << std::endl;
-            
+            if (DEBUG)
+                std::cout << "[P:" << myid << "|I:" << i << "] C+=" << A << "*"  << B << " My A:" << A << ", B:" << B << ", C:" << C << std::endl;
 
             // Distribution
             MPI_Send(&A, ELEMENT_COUNT, MPI_INT, 1, TAG_GROUP, MPI_COMM_WORLD);
@@ -95,13 +95,14 @@ int main(int argc, char* argv[])
             if (myid < matrixBColumns) // First row, receive only from left neighbor
             {
                 if (DEBUG)
-                std::cout << "[P:" << myid << "|I:" << i << "] First row waiting for myid-1 My A:" << A << ", B:" << B << ", C:" << C << std::endl;
+                    std::cout << "[P:" << myid << "|I:" << i << "] First row waiting for myid-1 My A:" << A << ", B:" << B << ", C:" << C << std::endl;
 
                 MPI_Recv(&A, ELEMENT_COUNT, MPI_INT, (myid-1), TAG_GROUP, MPI_COMM_WORLD, &stat);
 
                 B = getElementByWidth(myid, i, matrixBColumns, 'B');
 
-                std::cout << "====I TAKE: " << B << "====" << std::endl;
+                if (DEBUG)
+                    std::cout << "====I TAKE: " << B << "====" << std::endl;
 
                 if (DEBUG)
                     std::cout << "[P:" << myid << "|I:" << i << "] First row received My A:" << A << ", B:" << B << ", C:" << C << std::endl;
@@ -109,46 +110,59 @@ int main(int argc, char* argv[])
             else if (myid % matrixBColumns == 0) // First column
             {
                 if (DEBUG)
-                std::cout << "[P:" << myid << "|I:" << i << "] First column waiting for myid-matrixBcolumns My A:" << A << ", B:" << B << ", C:" << C << std::endl;
+                    std::cout << "[P:" << myid << "|I:" << i << "] First column waiting for myid-matrixBcolumns My A:" << A << ", B:" << B << ", C:" << C << std::endl;
 
                 MPI_Recv(&B, ELEMENT_COUNT, MPI_INT, (myid-matrixBColumns), TAG_GROUP, MPI_COMM_WORLD, &stat);
                     
                 // TODO: This is the place where wrong memory mapping happens
-                A = getElement(0, myid+i, 'A');
+                A = matrixA[(calculateAMatrixOffset(myid)+i)];
+                
+                    /* matrixA[(myid-((matrixAColumns-1)-i))] // NOPE */
+                    /* getElement(0, myid+i, 'A'); // NOPE */
+                    /* getElement(0, myid+i+1, 'A'); // NOPE */
 
                 if (DEBUG)
-                std::cout << "[P:" << myid << "|I:" << i << "] First column received; My A:" << A << ", B:" << B << ", C:" << C << std::endl;
-            }   // Up to this point, math in the background was done
+                    std::cout << "[P:" << myid << "|I:" << i << "] First column received; My A:" << A << ", B:" << B << ", C:" << C << std::endl;
+            }   
             else // Normal 
             {
                 if (DEBUG)
-                std::cout << "[P:" << myid << "|I:" << i << "] Normal waiting for myid-1 My A:" << A << ", B:" << B << ", C:" << C << std::endl;
+                    std::cout << "[P:" << myid << "|I:" << i << "] Normal waiting for myid-1 My A:" << A << ", B:" << B << ", C:" << C << std::endl;
+                
                 MPI_Recv(&A, ELEMENT_COUNT, MPI_INT, (myid-1), TAG_GROUP, MPI_COMM_WORLD, &stat);
+                
                 if (DEBUG)
-                std::cout << "[P:" << myid << "|I:" << i << "] Normal received for myid-1 My A:" << A << ", B:" << B << ", C:" << C << std::endl;
+                    std::cout << "[P:" << myid << "|I:" << i << "] Normal received for myid-1 My A:" << A << ", B:" << B << ", C:" << C << std::endl;
+                
                 if (DEBUG)
-                std::cout << "[P:" << myid << "|I:" << i << "] Normal waiting for myid-matrixBcolumns My A:" << A << ", B:" << B << ", C:" << C << std::endl;
+                    std::cout << "[P:" << myid << "|I:" << i << "] Normal waiting for myid-matrixBcolumns My A:" << A << ", B:" << B << ", C:" << C << std::endl;
+                
                 MPI_Recv(&B, ELEMENT_COUNT, MPI_INT, (myid-matrixBColumns), TAG_GROUP, MPI_COMM_WORLD, &stat);
+                
                 if (DEBUG)
-                std::cout << "[P:" << myid << "|I:" << i << "] Normal received My A:" << A << ", B:" << B << ", C:" << C << std::endl;
-            }   // here probably math background calclated as well
+                    std::cout << "[P:" << myid << "|I:" << i << "] Normal received My A:" << A << ", B:" << B << ", C:" << C << std::endl;
+            }
 
             // Calculate and store
             C += (A*B);
-            std::cout << "[P:" << myid << "|I:" << i << "] C+=" << A << "*"  << B << " My A:" << A << ", B:" << B << ", C:" << C << std::endl;
+
+            if (DEBUG)
+                std::cout << "[P:" << myid << "|I:" << i << "] C+=" << A << "*"  << B << " My A:" << A << ", B:" << B << ", C:" << C << std::endl;
  
             // Distribute numbes to neighbors (or not, if last-row || last-column processor)
             if (myid >= matrixBColumns*(matrixARows-1) && !(myid == (matrixBColumns*matrixARows)-1)) // Last row
             {
                 if (DEBUG)
-                std::cout << "[P:" << myid << "|I:" << i << "] Last row sent to P"<<(myid+1)<<" My A:" << A << ", B:" << B << ", C:" << C << std::endl;
+                    std::cout << "[P:" << myid << "|I:" << i << "] Last row sent to P"<<(myid+1)<<" My A:" << A << ", B:" << B << ", C:" << C << std::endl;
+                
                 MPI_Send(&A, ELEMENT_COUNT, MPI_INT, (myid+1), TAG_GROUP, MPI_COMM_WORLD);
             }
             else if ((myid+1) % matrixBColumns == 0 && !(myid == (matrixBColumns*matrixARows)-1)) // Last column
             {
                 // Send only to the one under me
                 if (DEBUG)
-                std::cout << "[P:" << myid << "|I:" << i << "] Last column sent to P"<< (myid+matrixBColumns) <<" My A:" << A << ", B:" << B << ", C:" << C << std::endl;
+                    std::cout << "[P:" << myid << "|I:" << i << "] Last column sent to P"<< (myid+matrixBColumns) <<" My A:" << A << ", B:" << B << ", C:" << C << std::endl;
+                
                 MPI_Send(&B, ELEMENT_COUNT, MPI_INT, (myid+matrixBColumns), TAG_GROUP, MPI_COMM_WORLD);
             }
             else if (myid == (matrixBColumns*matrixARows)-1) // The last mohican
@@ -159,15 +173,63 @@ int main(int argc, char* argv[])
             else // normal
             {
                 if (DEBUG)
-                std::cout << "[P:" << myid << "|I:" << i << "] Normal1 sent to P" << (myid+1) << " My A:" << A << ", B:" << B << ", C:" << C << std::endl;
+                    std::cout << "[P:" << myid << "|I:" << i << "] Normal1 sent to P" << (myid+1) << " My A:" << A << ", B:" << B << ", C:" << C << std::endl;
+                
                 MPI_Send(&A, ELEMENT_COUNT, MPI_INT, (myid+1), TAG_GROUP, MPI_COMM_WORLD);
                 
                 if (DEBUG)
-                std::cout << "[P:" << myid << "|I:" << i << "] Normal2 sent to P"<< (myid+matrixBColumns) << " My A:" << A << ", B:" << B << ", C:" << C << std::endl;
+                    std::cout << "[P:" << myid << "|I:" << i << "] Normal2 sent to P"<< (myid+matrixBColumns) << " My A:" << A << ", B:" << B << ", C:" << C << std::endl;
+                
                 MPI_Send(&B, ELEMENT_COUNT, MPI_INT, (myid+matrixBColumns), TAG_GROUP, MPI_COMM_WORLD);
             }
         
         }
+    }
+
+    // Calculation is completed, now all the guys will send data to root
+    // But first, we wait for it (just to be sure)
+    MPI_Barrier(MPI_COMM_WORLD);
+
+
+    if (myid == ROOT_RANK)
+    {
+        // Receive everything from everyone
+        int tmpBuff;
+        std::vector<int> finalMatrix;
+
+        // Store my root number
+        finalMatrix.push_back(C);
+        
+        for (int t = 1; t < numprocs; t++)
+        {
+            MPI_Recv(&tmpBuff, ELEMENT_COUNT, MPI_INT, t, TAG_GROUP, MPI_COMM_WORLD, &stat);
+            finalMatrix.push_back(tmpBuff);
+        }
+        
+        // Print it out in desired format
+        std::cout << matrixARows  <<  ":"   << matrixBColumns << std::endl;
+        int loopControl = 1;
+        for (std::vector<int>::iterator it = finalMatrix.begin(); it != finalMatrix.end(); it++)
+        {
+
+            std::cout << *it;
+
+            if ((loopControl%matrixBColumns) == 0)
+            {
+                std::cout << std::endl;
+            }
+            else
+            {
+                std::cout << " ";
+            }
+
+            loopControl++;
+        }
+    }
+    else
+    {
+        // Other worker processes just send their C value
+        MPI_Send(&C, ELEMENT_COUNT, MPI_INT, ROOT_RANK, TAG_GROUP, MPI_COMM_WORLD);
     }
 
 
@@ -184,16 +246,20 @@ void loadMatrixes()
 
     // Process matrix2 file
     loadMatFile('B');
-
-   /* if (DEBUG)
-    {
-        debug_showLoadedMatrixes();
-        std::cout << "Element at 0th row, 1st column is " << getElement(0, 1, 'A') << ", should be 2" << std::endl;
-        std::cout << "Element at 2nd row, 1st column is " << getElement(2, 1, 'B') << ", should be 6" << std::endl;
-    }*/
 }
 
+int calculateAMatrixOffset(int myid)
+{
+    // Divide number of all fields (processes) by ID and get boundary row id
+    // For 2x5 its 2 (cause its second line), decrement by one to reflect 0-start indexing
+    //int rowId = ((int) ((matrixARows*matrixBColumns)/myid))-1;
+    int rowId = ((int)myid/matrixBColumns);
 
+    // Now rowId * matrixAColumns = first element to be read which will be 
+    // further incremented by loop control afterwards
+    //return (rowId*matrixAColumns);
+    return (rowId * matrixAColumns);
+}
 
 /**
  * Maps 2D accesing to 1D vector
