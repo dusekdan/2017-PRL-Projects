@@ -1,5 +1,8 @@
 # 2017PRLProjects
-Projects for class of 2017, Parallel and Distributed Algorithms, Faculty of Information Technologies, Brno, University of Technology
+Projects for class of 2017, Parallel and Distributed Algorithms\s\s
+Faculty of Information Technologies, Brno, University of Technology
+
+Feel free to get inspired, but be careful not to end up facing disciplinary commission in case of too much inspiration. 
 
 ## Project 01
 Dummy project to test everything is working as expected.
