@@ -10,5 +10,5 @@ Implementation of paralel enumeration sort using 1 root level processor to distr
 ## Project 03
 Paralel algorithm for matrix Mesh Multiplication.
 
-10/10 points collected for Project 02
-9/10 points collected for Project 03 (sequence diagram in documentation is not general enough)
+* 10/10 points collected for Project 02
+* 9/10 points collected for Project 03 (sequence diagram in documentation is not general enough)
